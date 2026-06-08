@@ -10,10 +10,10 @@
   "themeConfig": {
     "aspectRatio": "9:16",
     "durationSec": 12,
-    "palette": { "bg": "#0B7A4B", "fg": "#FFFFFF", "accent": "#FFD400" },
-    "font": { "family": "sans-serif", "headlineWeight": 800 },
-    "caption": { "style": "word-by-word", "position": "center", "uppercase": true },
-    "pacing": { "wordsPerCut": 6 },
+    "palette": { "bg": "#16A34A", "fg": "#FFFFFF", "accent": "#F97316" },
+    "font": { "family": "Inter", "headlineWeight": 800 },
+    "caption": { "style": "word-by-word", "position": "bottom", "uppercase": true },
+    "pacing": { "wordsPerCut": 3 },
     "music": { "mood": "upbeat" },
     "intro": false,
     "outro": true
