@@ -1,6 +1,8 @@
 import React from "react";
 import {
   AbsoluteFill,
+  Audio,
+  staticFile,
   useCurrentFrame,
   useVideoConfig,
   interpolate,
@@ -10,7 +12,6 @@ import { loadFont } from "@remotion/google-fonts/Inter";
 
 const { fontFamily } = loadFont();
 
-// Tipos locais (estruturais — espelham @content-engine/core sem acoplar o bundler).
 type Roteiro = {
   gancho: string;
   desenvolvimento: string;
@@ -27,7 +28,13 @@ type ThemeConfig = {
   intro: boolean;
   outro: boolean;
 };
-export type ShortProps = { roteiro: Roteiro; themeConfig: ThemeConfig };
+type Caption = { text: string; startMs: number; endMs: number };
+export type ShortProps = {
+  roteiro: Roteiro;
+  themeConfig: ThemeConfig;
+  audio?: { src: string; durationMs: number } | null;
+  captions?: Caption[] | null;
+};
 
 // ── helpers de cor ───────────────────────────────────────────────────────────
 function hexToRgb(hex: string) {
@@ -46,56 +53,51 @@ function rgba(hex: string, a: number) {
   return `rgba(${r}, ${g}, ${b}, ${a})`;
 }
 
-// ── partículas de energia (sobe e faz loop) ──────────────────────────────────
 const Sparkles: React.FC<{ frame: number; w: number; h: number; color: string }> = ({
   frame,
   w,
   h,
   color,
-}) => {
-  const N = 16;
-  return (
-    <>
-      {Array.from({ length: N }).map((_, i) => {
-        const x = (Math.sin(i * 97.13) * 0.5 + 0.5) * w;
-        const speed = 0.7 + (i % 5) * 0.25;
-        const y = h - (((frame * speed + i * 71) % (h + 120)));
-        const size = 7 + (i % 4) * 6;
-        const op = 0.08 + (i % 3) * 0.05;
-        return (
-          <div
-            key={i}
-            style={{
-              position: "absolute",
-              left: x,
-              top: y,
-              width: size,
-              height: size,
-              borderRadius: "50%",
-              background: rgba(color, op),
-              filter: "blur(1px)",
-            }}
-          />
-        );
-      })}
-    </>
-  );
-};
+}) => (
+  <>
+    {Array.from({ length: 16 }).map((_, i) => {
+      const x = (Math.sin(i * 97.13) * 0.5 + 0.5) * w;
+      const speed = 0.7 + (i % 5) * 0.25;
+      const y = h - ((frame * speed + i * 71) % (h + 120));
+      const size = 7 + (i % 4) * 6;
+      const op = 0.08 + (i % 3) * 0.05;
+      return (
+        <div
+          key={i}
+          style={{
+            position: "absolute",
+            left: x,
+            top: y,
+            width: size,
+            height: size,
+            borderRadius: "50%",
+            background: rgba(color, op),
+            filter: "blur(1px)",
+          }}
+        />
+      );
+    })}
+  </>
+);
 
-// ── legenda word-by-word com mola/bounce ─────────────────────────────────────
-const Caption: React.FC<{
+const CaptionView: React.FC<{
   words: string[];
-  idx: number;
-  perWord: number;
+  activeIdx: number;
+  activeStartFrame: number;
   frame: number;
   fps: number;
   fg: string;
   accent: string;
   weight: number;
   show: (w: string) => string;
-}> = ({ words, idx, perWord, frame, fps, fg, accent, weight, show }) => {
-  const start = Math.max(0, idx - 1);
-  const win = words.slice(start, idx + 2);
+}> = ({ words, activeIdx, activeStartFrame, frame, fps, fg, accent, weight, show }) => {
+  const start = Math.max(0, activeIdx - 1);
+  const win = words.slice(start, activeIdx + 2);
   return (
     <div
       style={{
@@ -104,18 +106,16 @@ const Caption: React.FC<{
         justifyContent: "center",
         alignItems: "center",
         gap: "10px 18px",
-        maxWidth: 920,
+        maxWidth: 940,
         textAlign: "center",
       }}
     >
       {win.map((w, i) => {
         const g = start + i;
-        const active = g === idx;
-        const enter = spring({
-          frame: frame - g * perWord,
-          fps,
-          config: { damping: 11, mass: 0.6, stiffness: 150 },
-        });
+        const active = g === activeIdx;
+        const enter = active
+          ? spring({ frame: frame - activeStartFrame, fps, config: { damping: 11, mass: 0.6, stiffness: 150 } })
+          : 1;
         const scale = active
           ? interpolate(enter, [0, 1], [0.5, 1], { extrapolateLeft: "clamp", extrapolateRight: "extend" })
           : 0.8;
@@ -129,7 +129,7 @@ const Caption: React.FC<{
               color: active ? accent : fg,
               opacity: active ? 1 : 0.38,
               fontWeight: weight,
-              fontSize: active ? 108 : 64,
+              fontSize: active ? 104 : 62,
               lineHeight: 1.04,
               textShadow: "0 6px 26px rgba(0,0,0,0.35)",
             }}
@@ -159,7 +159,7 @@ const Outro: React.FC<{ cta: string; accent: string; fg: string; startFrame: num
           style={{
             color: fg,
             fontWeight: 900,
-            fontSize: 96,
+            fontSize: 92,
             lineHeight: 1.05,
             textShadow: "0 6px 26px rgba(0,0,0,0.35)",
           }}
@@ -185,33 +185,51 @@ const Outro: React.FC<{ cta: string; accent: string; fg: string; startFrame: num
   );
 };
 
-export const Short: React.FC<ShortProps> = ({ roteiro, themeConfig }) => {
+export const Short: React.FC<ShortProps> = ({ roteiro, themeConfig, audio, captions }) => {
   const { palette, caption } = themeConfig;
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
+  const ms = (frame / fps) * 1000;
 
-  const words = [roteiro.gancho, roteiro.desenvolvimento, roteiro.cta]
-    .join(" ")
-    .split(/\s+/)
-    .filter(Boolean);
+  const hasVoice = !!(captions && captions.length);
 
-  const outroFrames = themeConfig.outro ? Math.round(fps * 2) : 0;
-  const captionFrames = Math.max(1, durationInFrames - outroFrames);
-  const perWord = captionFrames / words.length;
-  const idx = Math.min(words.length - 1, Math.floor(frame / perWord));
-  const inOutro = frame >= captionFrames;
+  let words: string[];
+  let activeIdx: number;
+  let activeStartFrame: number;
+  let speechEndFrame: number;
 
-  // fundo da marca que "respira"
+  if (hasVoice) {
+    const caps = captions!;
+    words = caps.map((c) => c.text);
+    let ai = 0;
+    for (let i = 0; i < caps.length; i++) {
+      if (caps[i].startMs <= ms) ai = i;
+      else break;
+    }
+    activeIdx = ai;
+    activeStartFrame = (caps[ai].startMs / 1000) * fps;
+    speechEndFrame = Math.round((caps[caps.length - 1].endMs / 1000) * fps);
+  } else {
+    words = [roteiro.gancho, roteiro.desenvolvimento, roteiro.cta].join(" ").split(/\s+/).filter(Boolean);
+    const outroFrames = themeConfig.outro ? Math.round(fps * 2) : 0;
+    const cf = Math.max(1, durationInFrames - outroFrames);
+    const perWord = cf / words.length;
+    activeIdx = Math.min(words.length - 1, Math.floor(frame / perWord));
+    activeStartFrame = activeIdx * perWord;
+    speechEndFrame = cf;
+  }
+
+  const inOutro = frame >= speechEndFrame;
   const angle = 135 + Math.sin(frame / 40) * 18;
   const c1 = shade(palette.bg, 0.07);
   const c2 = shade(palette.bg, -0.16);
-
   const show = (w: string) => (caption.uppercase ? w.toUpperCase() : w);
   const justify =
     caption.position === "top" ? "flex-start" : caption.position === "bottom" ? "flex-end" : "center";
 
   return (
     <AbsoluteFill style={{ background: `linear-gradient(${angle}deg, ${c1}, ${c2})`, fontFamily }}>
+      {audio ? <Audio src={staticFile(audio.src)} /> : null}
       <Sparkles frame={frame} w={width} h={height} color={palette.accent} />
 
       <div
@@ -231,10 +249,10 @@ export const Short: React.FC<ShortProps> = ({ roteiro, themeConfig }) => {
 
       {!inOutro ? (
         <AbsoluteFill style={{ justifyContent: justify, alignItems: "center", padding: "0 70px 150px" }}>
-          <Caption
+          <CaptionView
             words={words}
-            idx={idx}
-            perWord={perWord}
+            activeIdx={activeIdx}
+            activeStartFrame={activeStartFrame}
             frame={frame}
             fps={fps}
             fg={palette.fg}
@@ -244,7 +262,7 @@ export const Short: React.FC<ShortProps> = ({ roteiro, themeConfig }) => {
           />
         </AbsoluteFill>
       ) : (
-        <Outro cta={show(roteiro.cta)} accent={palette.accent} fg={palette.fg} startFrame={captionFrames} />
+        <Outro cta={show(roteiro.cta)} accent={palette.accent} fg={palette.fg} startFrame={speechEndFrame} />
       )}
     </AbsoluteFill>
   );
