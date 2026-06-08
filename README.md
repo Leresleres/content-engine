@@ -35,15 +35,21 @@ reutilizável) que vira props do template. *Aprende o estilo, não copia o ativo
 
 ## Stack
 
-| Camada | Escolha |
+Tudo em **tier gratuito** (restrição do dono: custo R$0).
+
+| Camada | Escolha (grátis) |
 |---|---|
-| Render | Remotion (alternativa OSS: Revideo) |
-| Voz | Azure Neural TTS (PT-BR, timing por palavra) |
+| Render | Remotion¹ (alternativa MIT: Revideo) |
+| Voz | Edge TTS (`msedge-tts`, neural PT-BR, sem key) · fallback local: Piper |
+| LLM + Visão | Google Gemini free tier (conselho + extração de estilo) |
 | B-roll | Playwright grava a tela do app |
-| Estilo | Visão (Claude) → `ThemeConfig` |
+| Estilo | Gemini (visão) → `ThemeConfig` |
 | Fila | pg-boss (no Supabase do engine) |
-| Worker | Railway / Render (ffmpeg + Chromium) |
-| Storage | Cloudflare R2 |
+| Worker | local (M1) · depois: GitHub Actions / Oracle Free / local |
+| Storage | Cloudflare R2 (free: 10 GB, sem egress) |
+
+¹ Remotion é grátis p/ uso individual / empresa ≤3 pessoas. Se virar empresa maior,
+precisa licença paga → aí migra p/ Revideo (MIT). Sem custo hoje.
 
 ## Estrutura
 
