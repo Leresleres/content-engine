@@ -1,0 +1,14 @@
+node_modules/
+dist/
+out/
+.env
+.env.local
+*.local
+
+# renders / assets temporários
+/tmp/
+*.mp4
+*.wav
+*.mp3
+
+.DS_Store

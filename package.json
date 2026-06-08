@@ -1,0 +1,20 @@
+{
+  "name": "content-engine",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "connectors/*"
+  ],
+  "scripts": {
+    "typecheck": "tsc -b",
+    "db:push": "supabase db push"
+  },
+  "devDependencies": {
+    "@types/node": "^22.16.5",
+    "tsx": "^4.22.0",
+    "typescript": "^5.8.3"
+  }
+}
