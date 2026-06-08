@@ -17,12 +17,12 @@ pautas** para cá (contrato de ingestão).
 
 ```
 [ Supabase precoremedio ]                 [ content-engine (este repo) ]
- produtos, historico_precos                Supabase próprio + R2 (storage)
+ produtos, historico_precos                Supabase próprio + Storage
         │ detector (connector)             pautas(project_id) · style_profiles
         ▼                                   roteiros · render_jobs · assets
   detecta → IngestEvent  ──POST(token)──▶  ingest → conselho(LLM) → storyboard
                                                   → APROVAR (Studio)  ◀── gate humano
-                                                  → render (Remotion) → R2
+                                                  → render (Remotion) → Storage
 [ outro nicho ] ── seu detector ──POST──▶  mesma API
 ```
 
@@ -46,7 +46,7 @@ Tudo em **tier gratuito** (restrição do dono: custo R$0).
 | Estilo | Gemini (visão) → `ThemeConfig` |
 | Fila | pg-boss (no Supabase do engine) |
 | Worker | local (M1) · depois: GitHub Actions / Oracle Free / local |
-| Storage | Cloudflare R2 (free: 10 GB, sem egress) |
+| Storage | Supabase Storage (bucket privado "media") · R2 depois, se o volume crescer |
 
 ¹ Remotion é grátis p/ uso individual / empresa ≤3 pessoas. Se virar empresa maior,
 precisa licença paga → aí migra p/ Revideo (MIT). Sem custo hoje.
@@ -77,9 +77,10 @@ supabase/
 - **M3 — Loop completo**: connector precoremedio → pauta → conselho → storyboard → aprovar (Studio) → render → R2.
 - **M4+**: publicação (TikTok/Reels/WhatsApp), agendamento, analytics.
 
-## Setup (quando for rodar)
+## Setup
 
 1. `npm install`
-2. Criar Supabase do engine + aplicar `supabase/migrations/0001_init.sql`.
-3. Criar bucket R2 e preencher `.env` (ver `.env.example`).
-4. (M1+) deploy do worker no Railway/Render.
+2. Supabase do engine: criado (`sthtofztcuraaepipzqx`) + migrations `0001`/`0002` aplicadas. ✅
+3. Storage: bucket Supabase `media` já provisionado. ✅ (R2 fica para depois)
+4. `.env`: preencher `GEMINI_API_KEY` (free) + `SUPABASE_SERVICE_ROLE_KEY` do engine. Edge TTS dispensa chave.
+5. (M3) worker: local agora; depois GitHub Actions / Oracle Free.
