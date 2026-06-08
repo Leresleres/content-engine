@@ -5,6 +5,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "dependencies": {
+    "@content-engine/adapters": "*",
     "zod": "^3.25.76"
   }
 }
