@@ -1,0 +1,21 @@
+{
+  "roteiro": {
+    "gancho": "Esse remédio caiu 40% essa semana.",
+    "desenvolvimento": "O mesmo genérico que custava 48 reais agora sai por 29 em algumas farmácias. A diferença entre a mais cara e a mais barata chega a quase o dobro.",
+    "demonstracao": "tela do app comparando os preços por farmácia",
+    "cta": "Compara de graça no Preço Remédio",
+    "legenda": "Vale conferir antes de comprar.",
+    "hashtags": ["precoremedio", "economia", "farmacia"]
+  },
+  "themeConfig": {
+    "aspectRatio": "9:16",
+    "durationSec": 12,
+    "palette": { "bg": "#0B7A4B", "fg": "#FFFFFF", "accent": "#FFD400" },
+    "font": { "family": "sans-serif", "headlineWeight": 800 },
+    "caption": { "style": "word-by-word", "position": "center", "uppercase": true },
+    "pacing": { "wordsPerCut": 6 },
+    "music": { "mood": "upbeat" },
+    "intro": false,
+    "outro": true
+  }
+}
