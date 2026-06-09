@@ -3,6 +3,7 @@ import {
   AbsoluteFill,
   Audio,
   Img,
+  OffthreadVideo,
   Sequence,
   staticFile,
   useCurrentFrame,
@@ -37,6 +38,7 @@ export type ShortProps = {
   audio?: { src: string; durationMs: number } | null;
   captions?: Caption[] | null;
   broll?: { src: string; startMs: number; endMs: number; width: number; height: number } | null;
+  hook?: { kind: "image" | "clip"; src: string; startMs: number; endMs: number } | null;
 };
 
 // ── helpers de cor ───────────────────────────────────────────────────────────
@@ -209,7 +211,31 @@ const DemoBroll: React.FC<{ src: string; imgH: number; durF: number }> = ({ src,
   );
 };
 
-export const Short: React.FC<ShortProps> = ({ roteiro, themeConfig, audio, captions, broll }) => {
+// "gancho": mídia generativa do mascote — still (Img c/ ken-burns) ou clipe animado (OffthreadVideo).
+const HookMedia: React.FC<{ kind: "image" | "clip"; src: string; durF: number }> = ({ kind, src, durF }) => {
+  const f = useCurrentFrame();
+  const zoom = interpolate(f, [0, Math.max(1, durF)], [1.06, 1.14], { extrapolateRight: "clamp" });
+  return (
+    <AbsoluteFill style={{ overflow: "hidden", background: "#000" }}>
+      {kind === "clip" ? (
+        <OffthreadVideo src={staticFile(src)} muted style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+      ) : (
+        <Img
+          src={staticFile(src)}
+          style={{ width: "100%", height: "100%", objectFit: "cover", transform: `scale(${zoom})` }}
+        />
+      )}
+      <AbsoluteFill
+        style={{
+          background:
+            "linear-gradient(to top, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0) 40%, rgba(0,0,0,0.32) 100%)",
+        }}
+      />
+    </AbsoluteFill>
+  );
+};
+
+export const Short: React.FC<ShortProps> = ({ roteiro, themeConfig, audio, captions, broll, hook }) => {
   const { palette, caption } = themeConfig;
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
@@ -255,6 +281,19 @@ export const Short: React.FC<ShortProps> = ({ roteiro, themeConfig, audio, capti
     <AbsoluteFill style={{ background: `linear-gradient(${angle}deg, ${c1}, ${c2})`, fontFamily }}>
       {audio ? <Audio src={staticFile(audio.src)} /> : null}
       <Sparkles frame={frame} w={width} h={height} color={palette.accent} />
+
+      {hook ? (
+        <Sequence
+          from={Math.round((hook.startMs / 1000) * fps)}
+          durationInFrames={Math.max(1, Math.round(((hook.endMs - hook.startMs) / 1000) * fps))}
+        >
+          <HookMedia
+            kind={hook.kind}
+            src={hook.src}
+            durF={Math.max(1, Math.round(((hook.endMs - hook.startMs) / 1000) * fps))}
+          />
+        </Sequence>
+      ) : null}
 
       {broll ? (
         <Sequence

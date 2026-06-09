@@ -1,4 +1,5 @@
 import { loadEnv } from "./env.js";
+import { AdapterError, classifyHttp, isStructuralQuota } from "./errors.js";
 
 loadEnv();
 
@@ -45,7 +46,7 @@ async function generate(parts: Part[], responseSchema?: unknown): Promise<string
         await sleep(1500 * 2 ** attempt);
         continue;
       }
-      throw new Error(`Gemini (${MODEL}) ${lastErr}`);
+      throw new AdapterError({ kind: "transient", provider: "gemini", message: `${MODEL} ${lastErr}` });
     }
 
     if (res.ok) {
@@ -55,21 +56,22 @@ async function generate(parts: Part[], responseSchema?: unknown): Promise<string
       const text =
         json.candidates?.[0]?.content?.parts?.map((p) => p.text ?? "").join("") ?? "";
       if (!text) {
-        throw new Error("Gemini: resposta sem texto. " + JSON.stringify(json).slice(0, 400));
+        throw new AdapterError({ kind: "transient", provider: "gemini", message: "resposta sem texto. " + JSON.stringify(json).slice(0, 400) });
       }
       return text;
     }
 
     const detail = await res.text().catch(() => "");
     lastErr = `HTTP ${res.status}: ${detail.slice(0, 500)}`;
-    // 5xx = sobrecarga transitória → backoff e retry. 4xx = definitivo.
+    // 5xx = sobrecarga transitória → backoff e retry. 4xx = definitivo (classificado na taxonomia).
     if (res.status >= 500 && attempt < maxAttempts - 1) {
       await sleep(1500 * 2 ** attempt);
       continue;
     }
-    throw new Error(`Gemini ${MODEL}: ${lastErr}`);
+    const kind = classifyHttp(res.status, detail);
+    throw new AdapterError({ kind, provider: "gemini", status: res.status, message: `${MODEL}: ${detail.slice(0, 400)}`, structural: isStructuralQuota(detail) });
   }
-  throw new Error(`Gemini ${MODEL} falhou após ${maxAttempts} tentativas. ${lastErr}`);
+  throw new AdapterError({ kind: "transient", provider: "gemini", message: `${MODEL} falhou após ${maxAttempts} tentativas. ${lastErr}` });
 }
 
 /** Gera JSON estruturado a partir de um prompt de texto. */

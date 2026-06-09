@@ -64,8 +64,8 @@ export type StyleProfile = z.infer<typeof StyleProfileSchema>;
 
 export const ShotSchema = z.object({
   durationSec: z.number(),
-  kind: z.enum(["screencap", "image", "text"]),
-  /** screencap: instrução p/ Playwright · image: prompt/asset · text: card */
+  kind: z.enum(["screencap", "image", "text", "clip"]),
+  /** screencap: Playwright · image: still gerada/asset · text: card · clip: vídeo gerado (I2V) */
   source: z.string(),
   captionText: z.string().default(""),
 });

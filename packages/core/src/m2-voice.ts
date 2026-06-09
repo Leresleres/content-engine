@@ -4,11 +4,13 @@
  * Rodar da raiz:  npx tsx packages/core/src/m2-voice.ts
  * Depois:        cd packages/render && npx remotion render src/index.ts Short out/voice-short.mp4 --props=out/voice-input.json
  */
-import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { roteirista, type Pauta } from "./conselho.js";
 import { captureScreenshot } from "./capture.js";
-import { synthesize } from "@content-engine/adapters";
+import { buildMascotPrompt } from "./imagePrompt.js";
+import type { ThemeConfig } from "./schemas.js";
+import { generateImage, synthesize } from "@content-engine/adapters";
 
 const pauta: Pauta = {
   tipo: "queda",
@@ -69,7 +71,27 @@ const themeConfig = {
         ? { src: "broll.png", width: brollSize.width, height: brollSize.height, startMs: demoStartMs, endMs: demoEndMs }
         : null;
 
-    const input = { roteiro, themeConfig, audio: { src: "vo.mp3", durationMs }, captions: words, broll };
+    // Mascote no gancho (opcional, R$0): gera a still on-brand e usa de fundo do gancho.
+    // Pula sem derrubar o pipeline se não houver provider de imagem grátis configurado.
+    let hook: { kind: "image" | "clip"; src: string; startMs: number; endMs: number } | null = null;
+    try {
+      const refPath = join(process.cwd(), "ref.png");
+      const refImageB64 = existsSync(refPath) ? readFileSync(refPath).toString("base64") : undefined;
+      const prompt = buildMascotPrompt({
+        theme: themeConfig as unknown as ThemeConfig,
+        conceito: "uma cápsula de remédio 3D simpática e sorridente segurando uma etiqueta de desconto em branco",
+        aspect: "9:16",
+      });
+      const img = await generateImage({ prompt, refImageB64, refMime: "image/png", aspect: "9:16" });
+      const ext = img.mime.includes("png") ? "png" : "jpg";
+      writeFileSync(join(publicDir, `mascote.${ext}`), img.bytes);
+      hook = { kind: "image", src: `mascote.${ext}`, startMs: 0, endMs: demoStartMs };
+      console.log(`> Mascote (${img.provider}) no gancho → public/mascote.${ext}`);
+    } catch (e) {
+      console.warn("  mascote pulado (sem provider de imagem grátis):", e instanceof Error ? e.message : e);
+    }
+
+    const input = { roteiro, themeConfig, audio: { src: "vo.mp3", durationMs }, captions: words, broll, hook };
     const inputPath = join(outDir, "voice-input.json");
     writeFileSync(inputPath, JSON.stringify(input, null, 2), "utf8");
 
