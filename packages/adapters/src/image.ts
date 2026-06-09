@@ -93,8 +93,15 @@ async function cloudflareFlux(input: ImageInput): Promise<ImageResult> {
   if (!acct || !token) throw new AdapterError({ kind: "auth", provider: id, message: "CLOUDFLARE_ACCOUNT_ID/_API_TOKEN ausentes" });
   const model = process.env.CLOUDFLARE_IMAGE_MODEL || "@cf/black-forest-labs/flux-1-schnell";
   const url = `https://api.cloudflare.com/client/v4/accounts/${acct}/ai/run/${model}`;
+  const dims: Record<string, [number, number]> = {
+    "9:16": [768, 1344],
+    "1:1": [1024, 1024],
+    "4:5": [832, 1040],
+    "16:9": [1344, 768],
+  };
+  const [width, height] = dims[input.aspect ?? "9:16"] ?? [768, 1344];
 
-  const json = await fetchJson(id, url, { prompt: input.prompt }, { Authorization: `Bearer ${token}` });
+  const json = await fetchJson(id, url, { prompt: input.prompt, width, height, steps: 6 }, { Authorization: `Bearer ${token}` });
   const result = (json.result ?? {}) as { image?: string };
   if (!result.image) throw new AdapterError({ kind: "transient", provider: id, message: "resposta sem imagem" });
   return { bytes: Buffer.from(result.image, "base64"), mime: "image/jpeg", provider: id };
