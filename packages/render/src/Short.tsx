@@ -2,6 +2,8 @@ import React from "react";
 import {
   AbsoluteFill,
   Audio,
+  Img,
+  Sequence,
   staticFile,
   useCurrentFrame,
   useVideoConfig,
@@ -34,6 +36,7 @@ export type ShortProps = {
   themeConfig: ThemeConfig;
   audio?: { src: string; durationMs: number } | null;
   captions?: Caption[] | null;
+  broll?: { src: string; startMs: number; endMs: number; width: number; height: number } | null;
 };
 
 // ── helpers de cor ───────────────────────────────────────────────────────────
@@ -185,7 +188,28 @@ const Outro: React.FC<{ cta: string; accent: string; fg: string; startFrame: num
   );
 };
 
-export const Short: React.FC<ShortProps> = ({ roteiro, themeConfig, audio, captions }) => {
+// "demonstração": screenshot dos resultados com pan vertical suave (sempre mostra preços).
+const DemoBroll: React.FC<{ src: string; imgH: number; durF: number }> = ({ src, imgH, durF }) => {
+  const f = useCurrentFrame();
+  const { height } = useVideoConfig();
+  // a imagem tem 1080 de largura = largura da composição → altura exibida = imgH
+  const maxPan = Math.max(0, imgH - height);
+  const panY = -interpolate(f, [0, Math.max(1, durF)], [0, maxPan], { extrapolateRight: "clamp" });
+  return (
+    <div style={{ position: "absolute", inset: 0, overflow: "hidden", background: "#fff" }}>
+      <Img src={staticFile(src)} style={{ position: "absolute", top: panY, left: 0, width: "100%" }} />
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "linear-gradient(to top, rgba(0,0,0,0.72) 0%, rgba(0,0,0,0) 24%)",
+        }}
+      />
+    </div>
+  );
+};
+
+export const Short: React.FC<ShortProps> = ({ roteiro, themeConfig, audio, captions, broll }) => {
   const { palette, caption } = themeConfig;
   const frame = useCurrentFrame();
   const { fps, durationInFrames, width, height } = useVideoConfig();
@@ -232,6 +256,19 @@ export const Short: React.FC<ShortProps> = ({ roteiro, themeConfig, audio, capti
       {audio ? <Audio src={staticFile(audio.src)} /> : null}
       <Sparkles frame={frame} w={width} h={height} color={palette.accent} />
 
+      {broll ? (
+        <Sequence
+          from={Math.round((broll.startMs / 1000) * fps)}
+          durationInFrames={Math.max(1, Math.round(((broll.endMs - broll.startMs) / 1000) * fps))}
+        >
+          <DemoBroll
+            src={broll.src}
+            imgH={broll.height}
+            durF={Math.max(1, Math.round(((broll.endMs - broll.startMs) / 1000) * fps))}
+          />
+        </Sequence>
+      ) : null}
+
       <div
         style={{
           position: "absolute",
@@ -242,6 +279,7 @@ export const Short: React.FC<ShortProps> = ({ roteiro, themeConfig, audio, capti
           fontWeight: 800,
           fontSize: 30,
           letterSpacing: 1,
+          textShadow: "0 2px 14px rgba(0,0,0,0.55)",
         }}
       >
         Preço<span style={{ color: palette.accent }}> Remédio</span>

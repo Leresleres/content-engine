@@ -10,5 +10,10 @@ out/
 *.mp4
 *.wav
 *.mp3
+*.webm
+
+# assets gerados pelo pipeline (regenerados a cada run)
+packages/render/public/
+ref.png
 
 .DS_Store

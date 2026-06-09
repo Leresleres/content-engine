@@ -4,9 +4,10 @@
  * Rodar da raiz:  npx tsx packages/core/src/m2-voice.ts
  * Depois:        cd packages/render && npx remotion render src/index.ts Short out/voice-short.mp4 --props=out/voice-input.json
  */
-import { copyFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { roteirista, type Pauta } from "./conselho.js";
+import { captureScreenshot } from "./capture.js";
 import { synthesize } from "@content-engine/adapters";
 
 const pauta: Pauta = {
@@ -50,12 +51,31 @@ const themeConfig = {
     const { audioFilePath, words, durationMs } = await synthesize(narration, outDir);
     copyFileSync(audioFilePath, join(publicDir, "vo.mp3"));
 
-    const input = { roteiro, themeConfig, audio: { src: "vo.mp3", durationMs }, captions: words };
+    console.log("> B-roll (Playwright: screenshot dos resultados)...");
+    const brollPath = join(publicDir, "broll.png");
+    let brollSize: { width: number; height: number } | null = null;
+    try {
+      brollSize = await captureScreenshot(brollPath, "losartana");
+    } catch (e) {
+      console.warn("  b-roll falhou (segue sem):", e instanceof Error ? e.message : e);
+    }
+    // janela da "demonstração" = trecho do desenvolvimento na narração
+    const ganchoN = roteiro.gancho.trim().split(/\s+/).filter(Boolean).length;
+    const devN = roteiro.desenvolvimento.trim().split(/\s+/).filter(Boolean).length;
+    const demoStartMs = words[Math.min(ganchoN, words.length - 1)]?.startMs ?? 0;
+    const demoEndMs = words[Math.min(ganchoN + devN - 1, words.length - 1)]?.endMs ?? demoStartMs;
+    const broll =
+      brollSize && existsSync(brollPath)
+        ? { src: "broll.png", width: brollSize.width, height: brollSize.height, startMs: demoStartMs, endMs: demoEndMs }
+        : null;
+
+    const input = { roteiro, themeConfig, audio: { src: "vo.mp3", durationMs }, captions: words, broll };
     const inputPath = join(outDir, "voice-input.json");
     writeFileSync(inputPath, JSON.stringify(input, null, 2), "utf8");
 
     console.log(`\n✓ "${roteiro.gancho}"`);
     console.log(`✓ Voz: ${Math.round(durationMs)} ms · ${words.length} palavras sincronizadas → public/vo.mp3`);
+    console.log(`✓ B-roll: ${broll ? `${Math.round(demoStartMs)}–${Math.round(demoEndMs)} ms · ${broll.width}x${broll.height} → public/broll.png` : "(sem)"}`);
     console.log(`✓ Input: ${inputPath}`);
   } catch (e: unknown) {
     console.error("✗ ERRO:", e instanceof Error ? e.message : String(e));
