@@ -4,6 +4,7 @@ export * from "./errors.js";
 export * from "./registry.js";
 export * from "./alerts.js";
 export * from "./image.js";
+export * from "./llm.js";
 export * from "./animation.js";
 export * from "./health-store.js";
 export * from "./heartbeat.js";

@@ -1,4 +1,4 @@
-import { geminiJSON } from "@content-engine/adapters";
+import { generateJSON } from "@content-engine/adapters";
 import { RoteiroSchema, type Roteiro } from "./schemas.js";
 
 /** Pauta normalizada (subconjunto do que o engine guarda em `pautas`). */
@@ -49,9 +49,10 @@ export async function roteirista(pauta: Pauta): Promise<Roteiro> {
 PAUTA (tipo: ${pauta.tipo}${pauta.principioAtivo ? `, princípio ativo: ${pauta.principioAtivo}` : ""}):
 ${JSON.stringify(pauta.payload, null, 2)}
 
-Gere o roteiro. Responda APENAS com o JSON.`;
+Gere o roteiro. Responda APENAS com o JSON com as chaves: gancho, desenvolvimento, demonstracao, cta, legenda, hashtags.`;
 
-  const raw = await geminiJSON<unknown>(prompt, ROTEIRO_RESPONSE_SCHEMA);
+  // generateJSON = failover best-first de LLM (NIM → OpenRouter → Gemini).
+  const raw = await generateJSON<unknown>(prompt, ROTEIRO_RESPONSE_SCHEMA);
   return RoteiroSchema.parse(raw);
 }
 

@@ -94,4 +94,9 @@ export async function geminiVisionJSON<T>(
   return JSON.parse(text) as T;
 }
 
+/** Gera TEXTO bruto (sem JSON.parse) — usado pelo failover de LLM (llm.ts). */
+export async function geminiText(prompt: string, responseSchema?: unknown): Promise<string> {
+  return generate([{ text: prompt }], responseSchema);
+}
+
 export const geminiModel = MODEL;
