@@ -26,8 +26,9 @@ const theme: ThemeConfig = {
   outro: true,
 };
 
+// Em inglês: difusão segue cor/instrução muito melhor (ver imagePrompt.ts).
 const conceito =
-  "uma cápsula de remédio 3D simpática e sorridente, com bracinhos, segurando uma etiqueta de desconto em branco";
+  "a cute smiling 3D capsule character with little arms and white gloves, holding a blank white price tag";
 
 (async () => {
   try {

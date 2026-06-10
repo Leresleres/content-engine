@@ -43,8 +43,14 @@ async function fetchJson(
     }
     if (res.ok) return (await res.json()) as Record<string, unknown>;
     const detail = await res.text().catch(() => "");
-    if (res.status >= 500 && i < maxAttempts - 1) {
-      await sleep(1200 * 2 ** i);
+    // 429 NÃO-estrutural = rate-limit passageiro (ex.: klein ~1 gen/min no free):
+    // esperar e insistir no MESMO provider preserva qualidade; cair pro fallback
+    // trocaria o primário por um modelo pior à toa. Estrutural (cota 0) não re-tenta.
+    const rateLimited = res.status === 429 && !isStructuralQuota(detail);
+    if ((res.status >= 500 || rateLimited) && i < maxAttempts - 1) {
+      const retryAfterMs = Number(res.headers.get("retry-after")) * 1000;
+      const backoff = rateLimited ? 25_000 * (i + 1) : 1200 * 2 ** i;
+      await sleep(retryAfterMs > 0 ? Math.min(retryAfterMs, 90_000) : backoff);
       continue;
     }
     const kind = classifyHttp(res.status, detail);
@@ -136,17 +142,29 @@ async function nvidiaNim(input: ImageInput, id: string, model: string): Promise<
   const sizes: Record<string, string> = { "9:16": "768x1344", "1:1": "1024x1024", "4:5": "832x1040", "16:9": "1344x768" };
   const size = sizes[input.aspect ?? "9:16"] ?? "768x1344";
 
-  const json = await fetchJson(
-    id,
-    url,
-    { model, prompt: input.prompt, size, n: 1, response_format: "b64_json" },
-    { Authorization: `Bearer ${key}` }
-  );
+  // Dois dialetos de endpoint hospedado:
+  //  • /genai/ (nativo NIM, ex. flux.2-klein-4b): body {prompt,width,height,steps,seed},
+  //    SÓ 1024x1024 e steps<=4; o modelo vem do path do URL. Resposta artifacts[].base64.
+  //  • OpenAI images (/images/generations): body {model,prompt,size,...}, data[].b64_json.
+  const body = url.includes("/genai/")
+    ? // limite duro do endpoint: prompt <= 800 chars (422 string_too_long acima disso)
+      { prompt: input.prompt.slice(0, 800), width: 1024, height: 1024, steps: 4, seed: 0 }
+    : { model, prompt: input.prompt, size, n: 1, response_format: "b64_json" };
+  const json = await fetchJson(id, url, body, { Authorization: `Bearer ${key}` });
   // tolera os dois formatos: OpenAI (data[].b64_json) e genai nativo (artifacts[].base64)
   const data = (json.data ?? []) as Array<{ b64_json?: string }>;
-  const artifacts = (json.artifacts ?? []) as Array<{ base64?: string }>;
-  const b64 = data[0]?.b64_json ?? artifacts[0]?.base64;
-  if (!b64) throw new AdapterError({ kind: "transient", provider: id, message: "resposta sem imagem" });
+  const artifacts = (json.artifacts ?? []) as Array<{ base64?: string; finishReason?: string }>;
+  const b64 = data[0]?.b64_json || artifacts[0]?.base64;
+  if (!b64) {
+    // 200 com base64 vazio = moderação do provider (ex.: finishReason CONTENT_FILTERED).
+    // Trocar de provider ajuda (filtros diferem); mensagem explícita p/ diagnóstico.
+    const reason = artifacts[0]?.finishReason;
+    throw new AdapterError({
+      kind: "transient",
+      provider: id,
+      message: reason === "CONTENT_FILTERED" ? "prompt bloqueado pelo filtro de conteúdo do provider" : "resposta sem imagem",
+    });
+  }
   return { bytes: Buffer.from(b64, "base64"), mime: "image/png", provider: id };
 }
 
@@ -171,16 +189,18 @@ let registered = false;
 export function registerImageProviders(): void {
   if (registered) return;
   registered = true;
-  // NVIDIA NIM de imagem (Qwen-Image, melhor qualidade) só entra quando o endpoint
-  // exato do model card é configurado em NVIDIA_IMAGE_URL — senão a cascata usa Flux.
+  // NVIDIA NIM de imagem só entra quando o invoke URL do model card está em
+  // NVIDIA_IMAGE_URL. Verificado 2026-06-10: qwen-image NÃO tem endpoint hospedado
+  // (model card é self-host; nvcfFunctionId=None) — o melhor hospedado grátis é o
+  // FLUX.2-klein-4b via https://ai.api.nvidia.com/v1/genai/black-forest-labs/flux.2-klein-4b
   if (process.env.NVIDIA_IMAGE_URL) {
     registerProvider({
-      id: "nvidia-qwen-image",
+      id: "nvidia-nim-image",
       capability: "image",
       priority: 5,
       free: true,
       requiresCard: false,
-      call: (i) => nvidiaNim(i as ImageInput, "nvidia-qwen-image", process.env.NVIDIA_IMAGE_MODEL || "qwen/qwen-image-2512"),
+      call: (i) => nvidiaNim(i as ImageInput, "nvidia-nim-image", process.env.NVIDIA_IMAGE_MODEL || "black-forest-labs/flux.2-klein-4b"),
       health: nvidiaHealth,
     });
   }
