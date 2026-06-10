@@ -122,11 +122,60 @@ async function cloudflareHealth(): Promise<boolean> {
   }
 }
 
+// ── NVIDIA NIM (build.nvidia.com) — imagem de alta qualidade, hospedada, grátis (créditos) ──
+// API OpenAI-compatible. Modelos: qwen/qwen-image (campeão em "sem texto"/paleta),
+// black-forest-labs/flux.2-klein etc. Sem GPU. Créditos FINITOS → failover cobre quando acabam.
+
+const nvidiaBase = () => process.env.NVIDIA_BASE_URL || "https://integrate.api.nvidia.com/v1";
+
+async function nvidiaNim(input: ImageInput): Promise<ImageResult> {
+  const id = "nvidia-nim";
+  const key = process.env.NVIDIA_API_KEY;
+  if (!key) throw new AdapterError({ kind: "auth", provider: id, message: "NVIDIA_API_KEY ausente" });
+  const model = process.env.NVIDIA_IMAGE_MODEL || "qwen/qwen-image";
+  const sizes: Record<string, string> = { "9:16": "768x1344", "1:1": "1024x1024", "4:5": "832x1040", "16:9": "1344x768" };
+  const size = sizes[input.aspect ?? "9:16"] ?? "768x1344";
+
+  const json = await fetchJson(
+    id,
+    `${nvidiaBase()}/images/generations`,
+    { model, prompt: input.prompt, size, n: 1, response_format: "b64_json" },
+    { Authorization: `Bearer ${key}` }
+  );
+  // tolera os dois formatos: OpenAI (data[].b64_json) e genai nativo (artifacts[].base64)
+  const data = (json.data ?? []) as Array<{ b64_json?: string }>;
+  const artifacts = (json.artifacts ?? []) as Array<{ base64?: string }>;
+  const b64 = data[0]?.b64_json ?? artifacts[0]?.base64;
+  if (!b64) throw new AdapterError({ kind: "transient", provider: id, message: "resposta sem imagem" });
+  return { bytes: Buffer.from(b64, "base64"), mime: "image/png", provider: id };
+}
+
+/** Probe barato: lista modelos (não gasta créditos de geração). */
+async function nvidiaHealth(): Promise<boolean> {
+  const key = process.env.NVIDIA_API_KEY;
+  if (!key) return false;
+  try {
+    const res = await fetch(`${nvidiaBase()}/models`, { headers: { Authorization: `Bearer ${key}` } });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
 let registered = false;
-/** Registra os providers de imagem (idempotente). Nano Banana primeiro, Flux de fallback. */
+/** Registra os providers de imagem (idempotente). NIM (qualidade) → Nano Banana → Flux (volume). */
 export function registerImageProviders(): void {
   if (registered) return;
   registered = true;
+  registerProvider({
+    id: "nvidia-nim",
+    capability: "image",
+    priority: 5,
+    free: true,
+    requiresCard: false,
+    call: (i) => nvidiaNim(i as ImageInput),
+    health: nvidiaHealth,
+  });
   registerProvider({
     id: "gemini-nano-banana",
     capability: "image",
