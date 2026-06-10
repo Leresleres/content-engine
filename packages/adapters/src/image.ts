@@ -128,11 +128,9 @@ async function cloudflareHealth(): Promise<boolean> {
 
 const nvidiaBase = () => process.env.NVIDIA_BASE_URL || "https://integrate.api.nvidia.com/v1";
 
-async function nvidiaNim(input: ImageInput): Promise<ImageResult> {
-  const id = "nvidia-nim";
+async function nvidiaNim(input: ImageInput, id: string, model: string): Promise<ImageResult> {
   const key = process.env.NVIDIA_API_KEY;
   if (!key) throw new AdapterError({ kind: "auth", provider: id, message: "NVIDIA_API_KEY ausente" });
-  const model = process.env.NVIDIA_IMAGE_MODEL || "qwen/qwen-image";
   const sizes: Record<string, string> = { "9:16": "768x1344", "1:1": "1024x1024", "4:5": "832x1040", "16:9": "1344x768" };
   const size = sizes[input.aspect ?? "9:16"] ?? "768x1344";
 
@@ -163,17 +161,30 @@ async function nvidiaHealth(): Promise<boolean> {
 }
 
 let registered = false;
-/** Registra os providers de imagem (idempotente). NIM (qualidade) → Nano Banana → Flux (volume). */
+/**
+ * Registra os providers de imagem (idempotente), do MELHOR grátis ao inferior:
+ * NIM Qwen-Image → NIM FLUX.2-klein → Gemini Nano Banana → Cloudflare Flux schnell.
+ * O failover só desce de tier quando o de cima falha/esgota.
+ */
 export function registerImageProviders(): void {
   if (registered) return;
   registered = true;
   registerProvider({
-    id: "nvidia-nim",
+    id: "nvidia-qwen-image",
     capability: "image",
     priority: 5,
     free: true,
     requiresCard: false,
-    call: (i) => nvidiaNim(i as ImageInput),
+    call: (i) => nvidiaNim(i as ImageInput, "nvidia-qwen-image", process.env.NVIDIA_IMAGE_MODEL || "qwen/qwen-image"),
+    health: nvidiaHealth,
+  });
+  registerProvider({
+    id: "nvidia-flux2-klein",
+    capability: "image",
+    priority: 6,
+    free: true,
+    requiresCard: false,
+    call: (i) => nvidiaNim(i as ImageInput, "nvidia-flux2-klein", process.env.NVIDIA_IMAGE_MODEL_2 || "black-forest-labs/flux.2-klein"),
     health: nvidiaHealth,
   });
   registerProvider({
