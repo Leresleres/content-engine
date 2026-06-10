@@ -2,12 +2,13 @@ import { pathToFileURL } from "node:url";
 import { loadEnv } from "./env.js";
 import { getProviders, setHealth, type Capability } from "./registry.js";
 import { registerImageProviders } from "./image.js";
+import { registerLlmProviders } from "./llm.js";
 import { enableHealthPersistence, loadHealth } from "./health-store.js";
 
 loadEnv();
 
 /** Capacidades cobertas pelo heartbeat (animate entra com o adapter de animação). */
-const CAPS: Capability[] = ["image"];
+const CAPS: Capability[] = ["image", "llm"];
 
 /**
  * Probe de saúde de todos os providers conhecidos → atualiza + persiste
@@ -16,6 +17,7 @@ const CAPS: Capability[] = ["image"];
  */
 export async function runHeartbeat(): Promise<void> {
   registerImageProviders();
+  registerLlmProviders();
   enableHealthPersistence();
   await loadHealth();
 
