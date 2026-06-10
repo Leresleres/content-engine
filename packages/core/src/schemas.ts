@@ -11,7 +11,13 @@ export const RoteiroSchema = z.object({
   demonstracao: z.string().describe("O que mostrar na tela do app (vira screencap no render)"),
   cta: z.string().describe("Chamada para ação"),
   legenda: z.string().describe("Legenda do post"),
-  hashtags: z.array(z.string()).describe("5 a 8 hashtags sem o #"),
+  // tolera modelos que devolvem hashtags como string ("a, b c") em vez de array
+  hashtags: z
+    .preprocess(
+      (v) => (typeof v === "string" ? v.split(/[\s,]+/).map((s) => s.replace(/^#/, "")).filter(Boolean) : v),
+      z.array(z.string())
+    )
+    .describe("5 a 8 hashtags sem o #"),
 });
 export type Roteiro = z.infer<typeof RoteiroSchema>;
 
